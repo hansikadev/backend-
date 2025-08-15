@@ -39,4 +39,4 @@ const videoSchema= new Schema(
 )
 
 videoSchema.plugin(mongooseAggeratePaginate);
-export const video=mongoose.model("video",videoSchema);
+ 
