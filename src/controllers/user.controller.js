@@ -5,26 +5,34 @@ import {uploadOnCloudinary} from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 
 const registeruser= asyncHandler(async(req,res)=>{
+    // 1. Get user data from the request body
     const {fullname,email,username,password} = req.body
     console.log("email: ",email);
 
+     // 2. Validate the user data
     if(
-        [fullname,email,username,password].some((field)=>
+        [fullname,email,username,password].some((field)=> //.some() is an array method that returns true if at least one of the items in the array passes the test inside it.
             field?.trim()=== "")
     ){
         throw new ApiError(400,"all field are required")
-    }
+    } 
 
-    const existeduser=user.findOne({
+    //3) check if the user already exists :username/email
+    const existeduser=await user.findOne({
         $or:[{ username },{ email }]
     })
-
     if(existeduser){
         throw new ApiError(409,"user already exists")
     }
 
+    //4) check for images ,check for avatar 
     const avatarlocalpath=req.files?.avatar[0]?.path;
-    const coverimagelocalpath=req.files?.coverimage[0]?.path;
+    //const coverimagelocalpath=req.files?.coverimage[0]?.path;
+
+    let coverimagelocalpath;
+    if(req.files && Array.isArray(req.files.coverimage) && req.files.coverimage.length>0){
+        coverimagelocalpath=req.files.coverimage[0].path;
+    }
 
     if(!avatarlocalpath){
         throw new ApiError(400,"avatar file is required")
@@ -37,8 +45,9 @@ const registeruser= asyncHandler(async(req,res)=>{
         throw new ApiError(400,"avatar upload failed")
     }
 
-    const user=await user.create({
-        fullname:fullname,
+    // Step 6, 7, 8: Create User, Sanitize, and Check
+    const newuser=await user.create({
+        fullname,
         avatar:avatar.url,
         coverimage:coverimage?.url || "",
         email,
@@ -46,7 +55,7 @@ const registeruser= asyncHandler(async(req,res)=>{
         username:username.toLowerCase(),
     })
 
-    const createduser=await user.findById(user._id).select(
+    const createduser=await user.findById(newuser._id).select(
         "-password -refreshToken"
     )
 
@@ -54,6 +63,7 @@ const registeruser= asyncHandler(async(req,res)=>{
         throw new ApiError(500,"something went wrong while registering the user")
     }
 
+    //9) return response 
     return res.status(201).json(
         new ApiResponse(200, createduser, "User registered successfully")
     )
