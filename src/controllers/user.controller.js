@@ -67,16 +67,7 @@ const registeruser= asyncHandler(async(req,res)=>{
     return res.status(201).json(
         new ApiResponse(200, createduser, "User registered successfully")
     )
-})
-
-export {
-    registeruser
-};
-
-
-
-
-//steps for registering users
+    //steps for registering users
 //1) get the user data from the request body
 //2) validate the user data
 //3) check if the user already exists :username/email
@@ -86,4 +77,90 @@ export {
 //7) remove password and refresh token field from response
 //8) check for user creation 
 //9) return response 
+})
+
+const generateAccessAndRefreshTokens = async(user1Id)=> {
+    try{
+        const user1 = await user.findById(user1Id);
+        const accesstoken=user1.generateAccessToken()
+        const refreshtoken=user1.generateRefreshToken()
+
+        user1.refreshtoken=refreshtoken;
+        await user1.save({validateBeforeSave:false});
+
+        return {accesstoken, refreshtoken};
+    }
+    catch(err){
+        throw new ApiError(500, "something went wrong while generating refresh and access token");
+    }
+}
+
+
+//login user
+const loginuser= asyncHandler(async(req,res)=>{
+    //req body-> data
+    // username and email
+    //find the user
+    //check for password match
+    //generate acess and refresh token
+    //send cookie
+
+    //1) req body-> data
+    const {email,username,password}= req.body
+    if(!username || !email){
+        throw new ApiError(400,"username or email is required")
+    }
+
+    //2) username and email
+    const user1= await user.findOne({
+        $or:[{username},{email}]
+    })
+
+    //3) find the user
+    if(!user1){
+        throw new ApiError(404,"user not exist")
+    }
+
+    //4) check for password match
+    const isPasswordValid=await user.isPasswordCorrect(password)
+
+    if(!isPasswordValid){
+        throw new ApiError(404,"invalid user credentials")
+    }
+
+    //5) generate acess and refresh token
+    const {accesstoken,refreshtoken}=await generateAccessAndRefreshTokens(user1._id)
+
+    const loggedinuser=await user.findById(user1._id).select("-password -refreshtoken");
+    
+
+    //6) send cookie
+    const options={
+        httpOnly: true,
+        secure:true
+    }
+
+    return res
+    .status(200)
+    .cookie("accesstoken",accesstoken,options)
+    .cookie("refreshtoken",refreshtoken,options)
+    .json(
+        new ApiResponse(
+            200, 
+            {
+                user: loggedinuser, accesstoken, refreshtoken 
+            },
+            "user logged in successfully"
+        )           
+    )
+})
+
+
+
+export {
+    registeruser,
+    loginuser
+};
+
+
 
