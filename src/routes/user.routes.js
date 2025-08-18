@@ -18,4 +18,8 @@ router.route("/register").post(
     registeruser
 )
 
+router.route("/login").post(loginuser)
+
+//secured routes
+router.route("/logout").post(verifyjwt,logoutuser);
 export default router;
