@@ -44,23 +44,21 @@ const userSchema= new Schema(
             type:String
         }
     },
-    {
-        timestamps:true
-    }
+    {timestamps:true}
 )
 
-userSchema.pre("save",async function(next){
+userSchema.pre("save",async function(next){  //This code is a pre-save hook in Mongoose. Its purpose is to automatically and securely hash a user's password before it is saved to the database.
     if(!this.isModified("password")) return next();
-    this.password=await bcrypt.hash(this.password,10);
+    this.password=await bcrypt.hash(this.password,10); //this.password is used because in a Mongoose middleware function like .pre("save", ...), the keyword this refers to the specific document that is about to be saved. Using this.password allows you to directly access and modify the password field of that particular user document. A variable named just password would not have this connection.
     next();
 })
 
-userSchema.methods.isPasswordCorrect=async function(password){
+userSchema.methods.isPasswordCorrect=async function(password){ //making our own method
     return await bcrypt.compare(password, this.password); //return true or false based on password match
 }
 
 userSchema.methods.generateAccessToken=function(){
-    return jwt.sign(
+    return jwt.sign(  //jwt.sign(payload, secretOrPrivateKey, [options]);
         {
         _id:this._id,
         email:this.email,

@@ -22,6 +22,52 @@ const generateAccessAndRefreshTokens = async(user1Id)=> {
     }
 }
    
+const refreshAccessToken=asyncHandler(async(req,res)=>{
+    const incomingRefreshToken=req.cookies.refreshtoken || req.body.refreshtoken
+
+    if(!incomingRefreshToken){
+        throw new ApiError(401,"unauthorized request!")
+    }
+
+    //verify the refresh token
+    try{    
+        const decodedtoken= jwt.verify(incomingRefreshToken,process.env.REFRESH_TOKEN_SECRET);
+        const user=await user.findById(decodedtoken._id)
+
+        if(!user){
+            throw new ApiError(401,"invalid refresh token !")
+        }
+
+        if(user?.refreshtoken !== incomingRefreshToken){
+            throw new ApiError(401,"refresh token is expired or used!")
+        }
+
+        const options ={
+            httpOnly: true,
+            secure:true
+        }
+
+        //generate new access token
+        const {accesstoken,newrefreshtoken}=await generateAccessAndRefreshTokens(user._id);
+
+        return res
+        .status(200)
+        .cookie("accesstoken",accesstoken, options)
+        .cookie("refreshtoken",newrefreshtoken, options)
+        .json(          
+            new ApiResponse(
+                200, 
+                {accesstoken,refreshtoken: newrefreshtoken},
+                "new access token generated successfully"
+            )
+        )
+    }   
+    catch(err){
+        throw new ApiError(401,err?.message || "invalid refresh token !")
+    }
+
+})
+
 
 const registeruser= asyncHandler(async(req,res)=>{
     // 1. Get user data from the request body
@@ -49,7 +95,7 @@ const registeruser= asyncHandler(async(req,res)=>{
     //const coverimagelocalpath=req.files?.coverimage[0]?.path;
 
     let coverimagelocalpath;
-    if(req.files && Array.isArray(req.files.coverimage) && req.files.coverimage.length>0){
+    if(req.files && Array.isArray(req.files.coverimage) && req.files.coverimage.length>0){ // req.files: It first checks if the req.files object exists at all. If the user didn't upload any files, this object won't be created by Multer, and the check stops here, preventing an error => Array.isArray(req.files.coverimage): If req.files exists, it then checks if the coverimage property is an array. When using Multer's .fields() method, uploaded files are always placed inside an array, even if maxCount is 1. This check ensures the data is in the expected format. =>req.files.coverimage.length > 0: Finally, if it is an array, it checks if the array is not empty. This confirms that a coverimage file was actually included in the upload.
         coverimagelocalpath=req.files.coverimage[0].path;
     }
 
@@ -188,52 +234,6 @@ const logoutuser=asyncHandler(async(req,res)=>{
 })
 
 
-const refreshAccessToken=asyncHandler(async(req,res)=>{
-    const incomingRefreshToken=req.cookies.refreshtoken || req.body.refreshtoken
-
-    if(!incomingRefreshToken){
-        throw new ApiError(401,"unauthorized request!")
-    }
-
-    //verify the refresh token
-    try{    
-        const decodedtoken= jwt.verify(incomingRefreshToken,process.env.REFRESH_TOKEN_SECRET);
-        const user=await user.findById(decodedtoken._id)
-
-        if(!user){
-            throw new ApiError(401,"invalid refresh token !")
-        }
-
-        if(user?.refreshtoken !== incomingRefreshToken){
-            throw new ApiError(401,"refresh token is expired or used!")
-        }
-
-        const options ={
-            httpOnly: true,
-            secure:true
-        }
-
-        //generate new access token
-        const {accesstoken,newrefreshtoken}=await generateAccessAndRefreshTokens(user._id);
-
-        return res
-        .status(200)
-        .cookie("accesstoken",accesstoken, options)
-        .cookie("refreshtoken",newrefreshtoken, options)
-        .json(          
-            new ApiResponse(
-                200, 
-                {accesstoken,refreshtoken: newrefreshtoken},
-                "new access token generated successfully"
-            )
-        )
-    }   
-    catch(err){
-        throw new ApiError(401,err?.message || "invalid refresh token !")
-    }
-
-})
-
 const changeCurrentPassword=asyncHandler(async(req,res)=>{
     const {oldpassword,newpassword,confirmpassword}=req.body
     
@@ -248,8 +248,8 @@ const changeCurrentPassword=asyncHandler(async(req,res)=>{
         throw new ApiError(400,"old password is incorrect")
     }
 
-    user.password=newpassword
-    await user.save({validateBeforeSave:false})
+    user.password=newpassword //The user's password field is updated with the new plain-text password. A pre-save hook in the Mongoose model will automatically hash this new password before it's saved.
+    await user.save({validateBeforeSave:false}) //{ validateBeforeSave: false }: This is an important option. It tells Mongoose to skip running all the other schema validations (like checking for a valid email format) because we are only changing the password. This prevents accidental validation errors on other fields.
 
     return res
     .status(200)
@@ -301,7 +301,7 @@ const updateUserAvatar=asyncHandler(async(req,res)=>{
         {
             $set:{avatar:avatar.url}
         },
-        {new:true}
+        {new:true} //{ new: true }: This is an option that modifies the method's behavior. By default, findByIdAndUpdate returns the document as it was before the update. Setting { new: true } tells Mongoose to return the document after the update has been applied.
     ).select("-password -refreshtoken")
 
     return res
@@ -335,7 +335,6 @@ const updateUsercoverimage=asyncHandler(async(req,res)=>{
     .status(200)
     .json(new ApiResponse(200, updateduser, "user cover image updated successfully"))
 })
-
 
 
 export {
